@@ -10,7 +10,7 @@ using namespace drogon;
 void KafkaConsumerPlugin::initAndStart(const Json::Value &config) override {
   //all the variables here are defined in the kafkaConsumerPlugin.h file as private members of the class
 	brokers_ = config.get("brokers", "localhost:9092").asString();
-	groupId_ = config.get("group_id", "processing_service").asString();
+	groupId_ = config.get("group_id", "media-consumer-group").asString();
 	topic_ = config.get("topic", "media_processing").asString();
 	pollMs_  = config.get("poll_ms", 100).asUInt();
 	autoCommit_ = config.get("enable_auto_commit", false).asBool();
