@@ -32,8 +32,33 @@ add_executable(${PROJECT_NAME} main.cc)
 # and comment out the following lines
 find_package(Drogon CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon)
-find_package(CppKafka REQUIRED)
-target_link_libraries(${PROJECT_NAME} PRIVATE CppKafka::cppkafka)
+
+# Manually find cppkafka include and library
+find_path(CPPKAFKA_INCLUDE_DIR cppkafka/cppkafka.h PATHS /usr/local/include)
+find_library(CPPKAFKA_LIBRARY cppkafka PATHS /usr/local/lib)
+
+# Find librdkafka library
+find_library(RDKAFKA_LIBRARY rdkafka PATHS /usr/local/lib)
+
+if (NOT CPPKAFKA_INCLUDE_DIR)
+    message(FATAL_ERROR "Could not find cppkafka include directory")
+endif()
+
+if (NOT CPPKAFKA_LIBRARY)
+    message(FATAL_ERROR "Could not find cppkafka library")
+endif()
+
+if (NOT RDKAFKA_LIBRARY)
+    message(FATAL_ERROR "Could not find librdkafka library")
+endif()
+
+# Include directories and link libraries
+target_include_directories(${PROJECT_NAME} PRIVATE ${CPPKAFKA_INCLUDE_DIR})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY})
+
+# cppkafka usually does not include cmake pacakage config files, so find_package might not work, hence the above
+# find_package(CppKafka REQUIRED)
+# target_link_libraries(${PROJECT_NAME} PRIVATE CppKafka::cppkafka)
 
 # ##############################################################################
 

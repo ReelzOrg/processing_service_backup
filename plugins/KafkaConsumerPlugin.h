@@ -10,6 +10,8 @@ using namespace cppkafka;
 
 class KafkaConsumerPlugin : public Plugin<KafkaConsumerPlugin> {
 	public:
+		// The initAndStart and shutdown methods are from the Plugin class which is a template class. These 2 methods
+		// are called automatically when the drogon server is started and stopped.
 		void initAndStart(const Json::Value &config) override;
 		void shutdown() override;
 
