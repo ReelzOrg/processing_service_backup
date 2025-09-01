@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(processing_service CXX)
+project(processing_service_backup CXX)
 
 include(CheckIncludeFileCXX)
 
@@ -21,7 +21,11 @@ endif ()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(${PROJECT_NAME} main.cc)
+add_executable(${PROJECT_NAME} main.cc
+processing/MediaProcessor.cpp
+processing/MediaProcessor.h
+./schemas/generated/MediaProcessingJob.hh
+)
 
 # ##############################################################################
 # If you include the drogon source code locally in your project, use this method
@@ -32,6 +36,15 @@ add_executable(${PROJECT_NAME} main.cc)
 # and comment out the following lines
 find_package(Drogon CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon)
+
+find_package(Avro REQUIRED)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/schemas/generated)
+target_link_libraries(${PROJECT_NAME} PRIVATE Avro::avrocpp Avro::avrojson)
+
+find_package(AWSSDK REQUIRED COMPONENTS s3)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${AWSSDK_LINK_LIBRARIES})
+include_directories(/usr/local/include)
+link_directories(/usr/local/lib)
 
 # Manually find cppkafka include and library
 find_path(CPPKAFKA_INCLUDE_DIR cppkafka/cppkafka.h PATHS /usr/local/include)
@@ -86,12 +99,15 @@ drogon_create_views(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/views
 #                     ${CMAKE_CURRENT_BINARY_DIR} TRUE CHANGE_ME)
 
 target_include_directories(${PROJECT_NAME}
-                            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+                            PRIVATE
+                            ${CMAKE_CURRENT_SOURCE_DIR}
                         # ${CMAKE_CURRENT_SOURCE_DIR}/models
-                            ${CMAKE_CURRENT_SOURCE_DIR}/utils)
+                            ${CMAKE_CURRENT_SOURCE_DIR}/utils
+                            ${CMAKE_CURRENT_SOURCE_DIR}/processing)
 target_sources(${PROJECT_NAME}
                PRIVATE
                main.cc
+               processing/MediaProcessor.cpp
                ${CTL_SRC}
                ${FILTER_SRC}
                ${PLUGIN_SRC}

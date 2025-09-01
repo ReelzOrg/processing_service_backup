@@ -1,6 +1,7 @@
 #pragma once
 #include <drogon/drogon.h>
 #include <cppkafka/cppkafka.h>
+#include <vector>
 #include <memory>
 #include <thread>
 #include <atomic>
@@ -17,11 +18,12 @@ class KafkaConsumerPlugin : public Plugin<KafkaConsumerPlugin> {
 
 	private:
 		void consumeLoop();
-		bool processMessage(const std::string& topic,
+		bool processS3Files(const std::string& topic,
 			int partition,
 			TopicPartition::Offset offset,
 			const std::string& key,
-			const std::string& payload);
+			const xyz::virajdoshi::reelz::MediaProcessingJob& decodedMsg);
+		xyz::virajdoshi::reelz::MediaProcessingJob decodeAvroMessage(const Buffer& payload);
 
 		std::string brokers_;
 		std::string groupId_;
