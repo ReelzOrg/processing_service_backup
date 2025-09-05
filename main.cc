@@ -12,8 +12,8 @@ int main() {
     app().addListener("0.0.0.0", 5555);
     app().setLogLevel(trantor::Logger::kDebug);
     //Load config file
-    //drogon::app().loadConfigFile("../config.json"); 
-    //drogon::app().loadConfigFile("../config.yaml");
+    drogon::app().loadConfigFile("../config.jsonc"); 
+    //drogon::app().loadConfigFile("../config.yaml"); //remove the yaml config file
     //Run HTTP framework,the method will block in the internal event loop
     app().run();
     return 0;

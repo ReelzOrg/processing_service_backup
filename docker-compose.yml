@@ -1,0 +1,8 @@
+services:
+  drogon-server:
+    build: . # Docker Compose will look for a Dockerfile in the current directory
+    ports:
+      - "5555:5555"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
