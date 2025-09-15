@@ -37,14 +37,19 @@ processing/MediaProcessor.h
 find_package(Drogon CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon)
 
-find_package(Avro REQUIRED)
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/schemas/generated)
-target_link_libraries(${PROJECT_NAME} PRIVATE Avro::avrocpp Avro::avrojson)
+# set(Avro_DIR "/usr/local/lib/cmake/Avro")
+# find_package(Avro REQUIRED)
+# target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/schemas/generated)
+# target_link_libraries(${PROJECT_NAME} PRIVATE Avro::avrocpp Avro::avrojson)
+include_directories(/usr/local/include)
+link_directories(/usr/local/lib)
+target_link_libraries(${PROJECT_NAME} PRIVATE /usr/local/lib/libavrocpp.so)
+# target_link_libraries(${PROJECT_NAME} PRIVATE /usr/local/lib/libavrocpp.so /usr/local/lib/libavrojson.so)
 
 find_package(AWSSDK REQUIRED COMPONENTS s3)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${AWSSDK_LINK_LIBRARIES})
-include_directories(/usr/local/include)
-link_directories(/usr/local/lib)
+# include_directories(/usr/local/include)
+# link_directories(/usr/local/lib)
 
 # Manually find cppkafka include and library
 find_path(CPPKAFKA_INCLUDE_DIR cppkafka/cppkafka.h PATHS /usr/local/include)
@@ -67,6 +72,7 @@ endif()
 
 # Include directories and link libraries
 target_include_directories(${PROJECT_NAME} PRIVATE ${CPPKAFKA_INCLUDE_DIR})
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/schemas/generated)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY})
 
 # cppkafka usually does not include cmake pacakage config files, so find_package might not work, hence the above

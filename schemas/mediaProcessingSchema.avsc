@@ -7,14 +7,27 @@
       "name": "toProcessUrls",
       "type": {
         "type": "array",
-        "items": "string"
+        "items": {
+          "type": "record",
+          "name": "MediaItem",
+          "fields": [
+            {
+              "name": "url",
+              "type": "string"
+            },
+            {
+              "name": "mediaType",
+              "type": "string"
+            }
+          ]
+        }
       },
-      "doc": "An array of s3 urls of media files to be processed"
+      "doc": "An array of objects containing S3 URLs and their media types."
     },
     {
       "name": "uploadType",
       "type": "string",
-      "doc": "The type of upload (image, video, story)"
+      "doc": "The type of upload (post, reel, story)"
     },
     {
       "name": "post_id",

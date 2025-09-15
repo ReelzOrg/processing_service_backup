@@ -3,6 +3,7 @@
 #include <drogon/drogon.h>
 #include <aws/core/Aws.h>
 #include <aws/s3/S3Client.h>
+#include <aws/core/auth/AWSCredentials.h>
 
 //https://docs.aws.amazon.com/code-library/latest/ug/cpp_1_s3_code_examples.html
 
@@ -18,11 +19,22 @@ void AWSPlugin::initAndStart(const Json::Value &config) {
 		Aws::String(accessKey.c_str()),
 		Aws::String(secretKey.c_str())
 	);
+	// auto credentialsProvider = Aws::MakeShared<Aws::Auth::SimpleAWSCredentialsProvider>("CredentialsProvider", accessKey, secretKey);
 	
 	Aws::Client::ClientConfiguration clientConfig;
-	clientConfig.region = Aws::Region::US_EAST_1;
+	clientConfig.region = "us-east-1";
 
-	s3Client_ = Aws::MakeShared<Aws::S3::S3Client>("S3Client", credentials, clientConfig);
+	// Note: Create a s3 client like this: Aws::S3::S3Client(clientConfig); creates the client
+	// on the stack and is destroyed when the function returns. Since we want to keep the client
+	// alive for the entire duration of the application, we use Aws::MakeShared to create a shared
+	// pointer to the client.
+	s3Client_ = Aws::MakeShared<Aws::S3::S3Client>(
+        "S3Client",
+        credentials,
+        clientConfig,
+        Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+        /*useVirtualAddressing*/ false,
+        Aws::S3::US_EAST_1_REGIONAL_ENDPOINT_OPTION::LEGACY);
 
 	LOG_INFO << "AWS SDK initialized and S3 client created.";
 }
