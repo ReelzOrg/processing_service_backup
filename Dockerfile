@@ -44,37 +44,6 @@ RUN wget https://downloads.apache.org/avro/avro-1.12.0/cpp/avro-cpp-1.12.0.tar.g
 && tar -xzf avro-cpp-1.12.0.tar.gz \
 && cd avro-cpp-1.12.0 \
 && ./build.sh install
-# && mkdir build \
-# && cd build \
-# && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
-# -DBUILD_SHARED_LIBS=ON \
-# -DAVRO_BUILD_STATIC=OFF \
-# -DAVRO_BUILD_SHARED=ON \
-# -DAVRO_ENABLE_CPP=ON \
-# -DAVRO_ENABLE_EXAMPLES=OFF \
-# && make -j$(nproc) \
-# && make install \
-# && ldconfig \
-# && rm -rf /tmp/avro-cpp-1.12.0 /tmp/avro-cpp-1.12.0.tar.gz
-
-# Build and install Avro C++ (needed for proper CMake integration)
-# RUN cd /tmp && \
-# git clone --depth 1 https://github.com/apache/avro.git && \
-# # Build Avro C first
-# cd avro/lang/c && \
-# mkdir build && cd build && \
-# cmake .. -DCMAKE_BUILD_TYPE=Release && \
-# make -j$(nproc) && \
-# make install && \
-# ldconfig && \
-
-# # Build Avro C++
-# cd ../../c++ && \
-# mkdir build && cd build && \
-# cmake .. -DCMAKE_BUILD_TYPE=Release && \
-# make -j$(nproc) && \
-# make install && \
-# ldconfig
 
 # Clone cppkafka and build/install it
 RUN cd /tmp && \
@@ -137,10 +106,8 @@ CMD ["bash"]
 # # Expose the port for Drogon server
 # EXPOSE 5555
 
-# git clone this repository and run
-## docker build -t processing_service_image .
-# change processing_service_image to whatever you want your image to be called
+# To build the image:
+# docker build -t drogon_dev2 .
 
-# Then run:
-## docker run --name my_processing_service -p 5555:5555 processing_service_image
-## change my_processing_service to whatever you want your container to be called
+# To run the container:
+# docker run --name drogon_processing -it --rm -v "${PWD}:/app/processing_service_backup" -p 5555:5555 drogon_dev2
