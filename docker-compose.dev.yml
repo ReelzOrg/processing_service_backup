@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  mediaProcessingDev:
+    image: media_processing_dev
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      # Mount your source code - changes on host reflect in container
+      - .:/app
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    working_dir: /app
+    # Keep container running for interactive development
+    stdin_open: true
+    tty: true
+    command: /bin/bash

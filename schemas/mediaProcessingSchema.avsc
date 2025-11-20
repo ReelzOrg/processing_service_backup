@@ -2,6 +2,7 @@
   "type": "record",
   "name": "MediaProcessingJob",
   "namespace": "xyz.virajdoshi.reelz",
+  "doc": "A record representing a media processing job. Create the generated struct by using the command - avrogencpp -i mediaProcessingSchema.avsc -o MediaProcessingJob.hh -n xyz.virajdoshi.reelz",
   "fields": [
     {
       "name": "toProcessUrls",
@@ -11,13 +12,22 @@
           "type": "record",
           "name": "MediaItem",
           "fields": [
+            {"name": "url", "type": "string"},
+            {"name": "mediaType", "type": "string"},
             {
-              "name": "url",
-              "type": "string"
-            },
-            {
-              "name": "mediaType",
-              "type": "string"
+              "name": "dimensions",
+              "type": [
+                "null",
+                {
+                  "type": "record",
+                  "name": "Dimensions",
+                  "fields": [
+                    {"name": "width", "type": "int"},
+                    {"name": "height", "type": "int"}
+                  ]
+                }
+              ],
+              "default": null
             }
           ]
         }
@@ -41,7 +51,8 @@
     },
     {
       "name": "traceId",
-      "type": "string",
+      "type": ["null", "string"],
+      "default": null,
       "doc": "The trace id of the request"
     }
   ]

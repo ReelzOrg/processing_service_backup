@@ -56,11 +56,11 @@ void KafkaConsumerPlugin::initAndStart(const Json::Value &config) {
       throw std::runtime_error("Failed to initialize Kafka consumer");
     }
 
-		// The running_ variable here is used as a flag. If it is set to true,
-		// it means that the consumer thread is running.
+	// The running_ variable here is used as a flag. If it is set to true,
+	// it means that the consumer thread is running.
     running_.store(true);
 
-		// Creates and start a new thread
+	// Creates and start a new thread
     consumerThread_ = std::thread(&KafkaConsumerPlugin::consumeLoop, this);
     
     LOG_INFO << "KafkaConsumerPlugin started: topic=" << config_.topic 
@@ -126,7 +126,7 @@ void KafkaConsumerPlugin::consumeLoop() {
                 }
                 
                 // Add message to batch
-                messages.push_back(std::move(msg));
+                messages.emplace_back(std::move(msg));
                 
                 // Process batch if we've reached the max size
                 if (messages.size() >= config_.maxBatchSize) {
@@ -169,13 +169,27 @@ void KafkaConsumerPlugin::consumeLoop() {
 
 void KafkaConsumerPlugin::processMessageBatch(const std::vector<Message>& messages) {
     if (messages.empty()) return;
-    
     LOG_DEBUG << "Processing batch of " << messages.size() << " messages";
     
     for (const auto& msg : messages) {
         try {
             // Decode the Avro message
             auto decodedMsg = decodeAvroMessage(msg.get_payload());
+            
+            //print toProcessUrls
+            for (const auto& item : decodedMsg.toProcessUrls) {
+                std::cout << "---------------------------------------\n";
+                std::cout << "URL: " << item.url << "\n";
+                std::cout << "Media Type: " << item.mediaType << "\n";
+
+                if(!item.dimensions.is_null()) {
+                    xyz::virajdoshi::reelz::Dimensions dims = item.dimensions.get_Dimensions();
+                    std::cout << "Dimensions: " << dims.width << " x " << dims.height << "\n";
+                } else {
+                    std::cout << "Dimensions: n/a\n";
+                }
+                std::cout << "---------------------------------------\n";
+            }
             
             // Convert key buffer to string to avoid copying deleted Buffer copy-ctor
             std::string key;
@@ -185,6 +199,9 @@ void KafkaConsumerPlugin::processMessageBatch(const std::vector<Message>& messag
             }
             
             // Process the message
+            // Topic and partition are simple and commonly used types so the kafka
+            // library converts them to respective types internally hence no conversion
+            // is required
             if (!processS3Files(
                 msg.get_topic(),
                 msg.get_partition(),
@@ -218,6 +235,9 @@ xyz::virajdoshi::reelz::MediaProcessingJob KafkaConsumerPlugin::decodeAvroMessag
         throw std::runtime_error("Invalid Avro message: too short");
     }
 
+    //here static cast is used because get_data() return binary data
+    //earlier we used reinterpret_cast since we wanted to convert binary data
+    //to pointer of uint8_t
     const uint8_t* data = static_cast<const uint8_t*>(payload.get_data());
     
     // Validate magic byte
@@ -243,7 +263,7 @@ xyz::virajdoshi::reelz::MediaProcessingJob KafkaConsumerPlugin::decodeAvroMessag
         xyz::virajdoshi::reelz::MediaProcessingJob job;
         avro::decode(*decoder, job);
         
-        LOG_DEBUG << "Successfully decoded message with " << job.toProcessUrls.size() << " URLs";
+        // LOG_DEBUG << "Successfully decoded message with " << job.toProcessUrls << " URLs";
         return job;
         
     } catch (const avro::Exception& e) {
@@ -330,167 +350,6 @@ void KafkaConsumerPlugin::handleConsumerError(const std::exception& e) {
     }
 }
 
-//=================================================================
-// Fixed processS3Files method
-bool KafkaConsumerPlugin::processS3Files(const std::string& topic, int partition, TopicPartition::Offset offset,
-    const std::string& key, const xyz::virajdoshi::reelz::MediaProcessingJob& decodedMsg) {
-    
-    LOG_DEBUG << "Processing message - Topic: " << topic 
-              << " Partition: " << partition 
-              << " Offset: " << offset 
-              << " Key: " << key
-              << " Trace ID: " << decodedMsg.traceId;
-
-    if (decodedMsg.toProcessUrls.empty()) {
-        LOG_WARN << "No URLs to process in message";
-        return false;
-    }
-
-    const std::string& uploadType = decodedMsg.uploadType;
-    const std::string& postId = decodedMsg.post_id;
-    const int64_t timestamp = decodedMsg.timeStamp;
-    
-    LOG_INFO << "Processing " << decodedMsg.toProcessUrls.size() 
-             << " files for post " << postId 
-             << " (type: " << uploadType << ")"
-             << " Trace ID: " << decodedMsg.traceId;
-
-    try {
-        // Get AWSPlugin instance and S3 client
-        auto awsPlugin = drogon::app().getPlugin<AWSPlugin>();
-        if (!awsPlugin) {
-            LOG_ERROR << "Failed to get AWSPlugin instance";
-            return false;
-        }
-
-        auto s3Client = awsPlugin->getS3Client();
-        if (!s3Client) {
-            LOG_ERROR << "Failed to get S3 client from AWSPlugin";
-            return false;
-        }
-
-        // Configure media processing based on upload type
-        MediaProcessor::ProcessingConfig procConfig;
-        
-        if (uploadType == "reel" || uploadType == "story") {
-            procConfig.outputFormat = "mp4";
-            procConfig.videoBitrate = 2000;
-            procConfig.audioBitrate = 128;
-            procConfig.width = 1280;
-            procConfig.height = 1920; //9:16 for reels and stories
-            procConfig.threads = 4;
-        } else if (uploadType == "image") {
-            procConfig.outputFormat = "image2"; // For JPEG output
-            procConfig.videoBitrate = 0; // No video for images
-            procConfig.width = 1080;
-            procConfig.height = 1350; // Instagram aspect ratio (4:5)
-            procConfig.threads = 2;
-        } else {
-            LOG_WARN << "Unknown upload type: " << uploadType << ", using default config";
-        }
-        
-        MediaProcessor processor(s3Client, procConfig);
-        
-        // Prepare batch processing
-        std::vector<std::pair<std::string, std::string>> urlPairs;
-        
-        for (const auto& item : decodedMsg.toProcessUrls) {
-            const std::string& url = item.url;
-            const std::string& mediaType = item.mediaType;
-
-            if (url.empty()) {
-                LOG_WARN << "Empty URL in message, skipping";
-                continue;
-            }
-            
-            // Extract bucket and key from S3 URL
-            std::string bucket = "reelzapp"; // Default bucket
-            std::string inputKey;
-            
-            if (url.find("s3://") == 0) {
-                // Parse S3 URL
-                auto path = url.substr(5); // Remove "s3://"
-                auto pos = path.find('/');
-                if (pos != std::string::npos) {
-                    bucket = path.substr(0, pos);
-                    inputKey = path.substr(pos + 1);
-                }
-            } else if (url.find("http") == 0) {
-                // If it's an HTTP URL, use it directly
-                // Extract filename from URL for output naming
-                auto lastSlash = url.find_last_of('/');
-                inputKey = (lastSlash != std::string::npos) ? url.substr(lastSlash + 1) : url;
-            } else {
-                LOG_WARN << "Invalid URL format: " << url;
-                continue;
-            }
-            
-            // Generate unique output filename
-            std::string extension = (uploadType == "image") ? ".jpg" : ".mp4";
-            std::string outputFilename = std::to_string(std::hash<std::string>{}(url + std::to_string(timestamp))) + extension;
-            
-            // Generate output path: processed/<post_id>/<filename>
-            std::string outputKey = "processed/" + postId + "/" + outputFilename;
-            std::string outputUrl = "s3://" + bucket + "/" + outputKey;
-            
-            // urlPairs.push_back({url, outputUrl});
-            urlPairs.emplace_back(url, outputUrl);
-            
-            LOG_DEBUG << "Queued for processing: " << url << " -> " << outputUrl;
-        }
-        
-        if (urlPairs.empty()) {
-            LOG_WARN << "No valid URLs to process after validation";
-            return false;
-        }
-        
-        // Process all files in parallel
-        auto futures = processor.processBatch(urlPairs);
-        
-        // Wait for all processing to complete and collect results
-        size_t successCount = 0;
-        size_t failureCount = 0;
-        
-        for (size_t i = 0; i < futures.size(); ++i) {
-            try {
-                bool success = futures[i].get(); // Wait for completion
-                if (success) {
-                    successCount++;
-                    LOG_INFO << "Successfully processed: " << urlPairs[i].first 
-                            << " -> " << urlPairs[i].second;
-                    
-                    // TODO: Update database with processed URL
-                    // You might want to batch these updates or send them to another queue
-                    updateProcessedMedia(postId, urlPairs[i].first, urlPairs[i].second, uploadType);
-                } else {
-                    failureCount++;
-                    LOG_ERROR << "Failed to process: " << urlPairs[i].first;
-                    
-                    // TODO: Send to dead letter queue or implement retry logic
-                    handleProcessingFailure(postId, urlPairs[i].first, decodedMsg.traceId);
-                }
-            } catch (const std::exception& e) {
-                failureCount++;
-                LOG_ERROR << "Exception while processing " << urlPairs[i].first 
-                         << ": " << e.what();
-            }
-        }
-        
-        LOG_INFO << "Batch processing complete for post " << postId 
-                << " - Success: " << successCount 
-                << ", Failures: " << failureCount
-                << ", Trace ID: " << decodedMsg.traceId;
-        
-        // Return true if at least one file was processed successfully
-        return successCount > 0;
-        
-    } catch (const std::exception& e) {
-        LOG_ERROR << "Error in processS3Files: " << e.what() 
-                 << " (Trace ID: " << decodedMsg.traceId << ")";
-        return false;
-    }
-}
-
 // Add these helper methods to KafkaConsumerPlugin class:
 void KafkaConsumerPlugin::updateProcessedMedia(const std::string& postId,
                                               const std::string& originalUrl,
@@ -523,6 +382,157 @@ void KafkaConsumerPlugin::updateProcessedMedia(const std::string& postId,
         }
     });
     */
+}
+
+//=================================================================
+// Fixed processS3Files method
+bool KafkaConsumerPlugin::processS3Files(const std::string& topic, int partition, TopicPartition::Offset offset,
+    const std::string& key, const xyz::virajdoshi::reelz::MediaProcessingJob& decodedMsg) {
+    
+    LOG_DEBUG << "Processing message - Topic: " << topic 
+              << " Partition: " << partition 
+              << " Offset: " << offset 
+              << " Key: " << key;
+            //   << " Trace ID: " << decodedMsg.traceId;
+
+    if (decodedMsg.toProcessUrls.empty()) {      //There is no member named 'empty'
+        LOG_WARN << "No URLs to process in message";
+        return false;
+    }
+
+    const std::string& uploadType = decodedMsg.uploadType;
+    const std::string& postId = decodedMsg.post_id;
+    const int64_t timestamp = decodedMsg.timeStamp;
+    
+    LOG_INFO << "Processing " << decodedMsg.toProcessUrls.size() 
+             << " files for post " << postId 
+             << " (type: " << uploadType << ")"
+    //          << " Trace ID: " << decodedMsg.traceId;
+
+    try {
+        // Get AWSPlugin instance and S3 client
+        auto awsPlugin = drogon::app().getPlugin<AWSPlugin>();
+        if (!awsPlugin) {
+            LOG_ERROR << "Failed to get AWSPlugin instance";
+            return false;
+        }
+
+        auto s3Client = awsPlugin->getS3Client();
+        if (!s3Client) {
+            LOG_ERROR << "Failed to get S3 client from AWSPlugin";
+            return false;
+        }
+
+        // Configure media processing based on upload type
+        MediaProcessor::ProcessingConfig procConfig;
+        
+        //for stories the uploadType can be either reel or image
+        if (uploadType == "reel") {
+            procConfig.outputFormat = "mp4";
+            procConfig.res = {{1440, 7250, 192}, {1080, 3750, 160}, {720, 1850, 128}, {360, 900, 128}};
+            // procConfig.videoBitrate = 2000;
+            // procConfig.audioBitrate = 128;
+            // procConfig.width = 1280;
+            // procConfig.height = 1920; //9:16 for reels and stories
+            procConfig.threads = 4;
+        } else if (uploadType == "image") {
+            procConfig.outputFormat = "jpg"; // For JPEG output
+            // procConfig.videoBitrate = 0; // No video for images
+            // procConfig.width = 1080;
+            // procConfig.height = 1350; // Instagram aspect ratio (4:5)
+            procConfig.threads = 2;
+        } else {
+            LOG_WARN << "Unknown upload type: " << uploadType << ", using default config";
+        }
+        
+        MediaProcessor processor(s3Client, procConfig);
+        std::vector<std::pair<std::string, std::string>> urlPairs;
+        // Extract bucket and key from S3 URL
+        std::string bucket = "reelzapp"; // Default bucket
+        
+        //creates pairs of input and output urls and adds it to the urlPairs vector
+        //commented out so that the code compiles. Check the decodedMsg value
+        // for (const auto& item : decodedMsg.toProcessUrls) {
+        //     const std::string& url = item.url;
+        //     const std::string& mediaType = item.mediaType;
+
+        //     if (url.empty()) {
+        //         LOG_WARN << "Empty URL in message, skipping";
+        //         continue;
+        //     }
+            
+        //     std::string path;
+            
+        //     //https://reelzapp.s3.us-east-1.amazonaws.com/userPosts/44938b73-afca-4cf9-a298-bd6c5a7bda46/97f5cd4d-e515-4775-b7b6-baf649f6c5c5/post_1000000041-1
+        //     if (url.find("https://reelzapp.s3.us-east-1.amazonaws.com/") == 0) {
+        //         path = url.substr(44);
+        //     } else {
+        //         LOG_WARN << "Invalid URL format: " << url;
+        //         continue;
+        //     }
+            
+        //     // Generate unique output filename
+        //     std::string extension = (mediaType == "image") ? ".jpg" : ".mp4";
+        //     std::string outputFilename = std::to_string(std::hash<std::string>{}(url + std::to_string(timestamp))) + extension;
+            
+        //     // Generate output path: processed/<filename>
+        //     std::string outputKey = "processed/" + outputFilename;
+        //     std::string outputUrl = "https://reelzapp.s3.us-east-1.amazonaws.com/"+ path.substr(0, path.find_last_of('/')) + "/" + outputKey;
+            
+        //     urlPairs.emplace_back(url, outputUrl);
+            
+        //     LOG_DEBUG << "Queued for processing: " << url << " -> " << outputUrl;
+        // }
+        
+        if (urlPairs.empty()) {
+            LOG_WARN << "No valid URLs to process after validation";
+            return false;
+        }
+        
+        // Process all files in parallel
+        auto futures = processor.processBatch(urlPairs, bucket);
+        
+        // Wait for all processing to complete and collect results
+        size_t successCount = 0;
+        size_t failureCount = 0;
+        
+        for (size_t i = 0; i < futures.size(); ++i) {
+            try {
+                bool success = futures[i].get(); // Wait for completion
+                if (success) {
+                    successCount++;
+                    LOG_INFO << "Successfully processed: " << urlPairs[i].first;
+                    
+                    // TODO: Update database with processed URL
+                    // You might want to batch these updates or send them to another queue
+                    updateProcessedMedia(postId, urlPairs[i].first, urlPairs[i].second, uploadType);
+                } else {
+                    failureCount++;
+                    LOG_ERROR << "Failed to process: " << urlPairs[i].first;
+                    
+                    // TODO: Send to dead letter queue or implement retry logic
+                    // handleProcessingFailure(postId, urlPairs[i].second, decodedMsg.traceId);
+                }
+            } catch (const std::exception& e) {
+                failureCount++;
+                LOG_ERROR << "Exception while processing " << urlPairs[i].first 
+                         << ": " << e.what();
+            }
+        }
+        
+        // LOG_INFO << "Batch processing complete for post " << postId 
+        //         << " - Success: " << successCount 
+        //         << ", Failures: " << failureCount
+        //         << ", Trace ID: " << decodedMsg.traceId;
+        
+        // Return true if at least one file was processed successfully
+        return successCount > 0;
+        
+    } catch (const std::exception& e) {
+        // LOG_ERROR << "Error in processS3Files: " << e.what() 
+        //          << " (Trace ID: " << decodedMsg.traceId << ")";
+        return false;
+    }
 }
 
 void KafkaConsumerPlugin::handleProcessingFailure(const std::string& postId,

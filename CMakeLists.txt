@@ -34,19 +34,23 @@ processing/MediaProcessor.h
 # target_link_libraries(${PROJECT_NAME} PRIVATE drogon)
 #
 # and comment out the following lines
+# set(CMAKE_PREFIX_PATH "/usr/local" ${CMAKE_PREFIX_PATH})
 find_package(Drogon CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon)
 
 # set(Avro_DIR "/usr/local/lib/cmake/Avro")
 # find_package(Avro REQUIRED)
 # target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/schemas/generated)
+# target_link_libraries(${PROJECT_NAME} PRIVATE Avro::avrocpp)
 # target_link_libraries(${PROJECT_NAME} PRIVATE Avro::avrocpp Avro::avrojson)
+
+# This is manual linking, which is not recommended 
 include_directories(/usr/local/include)
 link_directories(/usr/local/lib)
 target_link_libraries(${PROJECT_NAME} PRIVATE /usr/local/lib/libavrocpp.so)
 # target_link_libraries(${PROJECT_NAME} PRIVATE /usr/local/lib/libavrocpp.so /usr/local/lib/libavrojson.so)
 
-find_package(AWSSDK REQUIRED COMPONENTS s3)
+find_package(AWSSDK REQUIRED COMPONENTS core s3)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${AWSSDK_LINK_LIBRARIES})
 # include_directories(/usr/local/include)
 # link_directories(/usr/local/lib)

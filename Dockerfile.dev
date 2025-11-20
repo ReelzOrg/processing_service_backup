@@ -1,0 +1,71 @@
+# Development Dockerfile - includes all build tools and dependencies
+# Use this for development with volume mounting
+
+FROM drogonframework/drogon AS dev_base
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install all build tools and dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    cmake \
+    build-essential \
+    wget \
+    pkg-config \
+    flex \
+    bison \
+    libtool \
+    autoconf \
+    automake \
+    libboost-all-dev \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libavfilter-dev \
+    libavdevice-dev \
+    libswscale-dev \
+    libfmt-dev \
+    librdkafka-dev \
+    libjansson-dev \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build and install Avro C++
+WORKDIR /tmp
+RUN wget https://downloads.apache.org/avro/avro-1.12.0/cpp/avro-cpp-1.12.0.tar.gz \
+    && tar -xzf avro-cpp-1.12.0.tar.gz \
+    && cd avro-cpp-1.12.0 \
+    && ./build.sh install \
+    && ldconfig \
+    && rm -rf /tmp/avro-cpp-1.12.0*
+
+# Build and install CppKafka
+RUN git clone https://github.com/mfontanini/cppkafka.git \
+    && cd cppkafka && mkdir build && cd build \
+    && cmake .. \
+    && make -j$(nproc) \
+    && make install \
+    && ldconfig \
+    && rm -rf /tmp/cppkafka
+
+# Build and install AWS SDK (core + s3)
+RUN git clone --recurse-submodules --depth 1 https://github.com/aws/aws-sdk-cpp \
+    && cd aws-sdk-cpp \
+    && cmake . -DBUILD_ONLY="core;s3" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DMINIMIZE_SIZE=ON \
+              -DCMAKE_INSTALL_PREFIX=/usr/local \
+              -DENABLE_TESTING=OFF \
+    && make -j$(nproc) \
+    && make install \
+    && ldconfig \
+    && rm -rf /tmp/aws-sdk-cpp
+
+# Set working directory
+WORKDIR /app
+
+# Expose port
+EXPOSE 5555
+
+# Default command (bash for interactive development)
+CMD ["/bin/bash"]

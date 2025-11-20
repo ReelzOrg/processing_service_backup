@@ -137,8 +137,8 @@ private:
     // Threading
     std::unique_ptr<Consumer> consumer_;
     std::thread consumerThread_;
-    std::atomic<bool> running_{false};
-    std::mutex consumerMutex_;
+    std::atomic<bool> running_{false}; //make single operations on 1 variable thread safe
+    std::mutex consumerMutex_; //similar to atomic but for complex/multiple operations
     std::condition_variable shutdownCV_;
     bool isShuttingDown_{false};
     

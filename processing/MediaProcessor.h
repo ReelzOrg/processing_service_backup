@@ -26,12 +26,19 @@ namespace drogon {
 
 class MediaProcessor {
 public:
+    struct VideoConfig {
+        int width;
+        int videoBitrate;
+        int audioBitrate;
+    };
+
     struct ProcessingConfig {
-        std::string outputFormat = "mp4";
-        int videoBitrate = 2000;  // in kbps
-        int audioBitrate = 128;   // in kbps
-        int width = 1280;
-        int height = 720;
+        std::string outputFormat;
+        // int videoBitrate = 2000;  // in kbps
+        // int audioBitrate = 128;   // in kbps
+        //9:16 for reels and stories
+        //width, videoBitrate, audioBitrate - Calculate height by maintaining aspect ratio
+        std::vector<VideoConfig> res;
         int threads = 4;          // FFmpeg thread count
     };
 
@@ -41,7 +48,7 @@ public:
     ~MediaProcessor();
 
     // Process a single media file
-    bool processFile(const std::string& sourceUrl, const std::string& destinationUrl);
+    bool processFile(const std::string& sourceUrl, const std::string& destinationUrl, const std::string& bucketName);
     
     /**
      * @brief Process multiple media files in parallel
@@ -49,7 +56,7 @@ public:
      * @return Vector of futures representing the processing status of each file
      */
     std::vector<std::future<bool>> processBatch(
-        const std::vector<std::pair<std::string, std::string>>& urlPairs);
+        const std::vector<std::pair<std::string, std::string>>& urlPairs, const std::string& bucketName);
 
 private:
     class FFmpegPipe {
@@ -69,16 +76,17 @@ private:
     };
 
     // Main processing function using streaming
-    bool processWithStreaming(const std::string& sourceUrl, 
-                            const std::string& destinationUrl);
+    bool processWithStreaming(const std::string& sourceUrl,
+                            const std::string& destinationUrl,
+                            const std::string& bucketName);
     
     // S3 multipart upload helpers
     std::string uploadPart(const std::string& bucket,
-                          const std::string& key,
-                          const std::string& uploadId,
-                          const char* data,
-                          size_t size,
-                          int partNumber);
+                        const std::string& key,
+                        const std::string& uploadId,
+                        const char* data,
+                        size_t size,
+                        int partNumber);
     
     bool completeMultipartUpload(const std::string& bucket,
                                 const std::string& key,
@@ -91,7 +99,7 @@ private:
     
     // Deprecated - kept for backward compatibility
     bool downloadAndProcessChunk(const std::string& sourceUrl, 
-                               const std::string& destinationUrl);
+                                const std::string& destinationUrl);
     bool uploadChunk(const std::string& uploadId, 
                     const std::string& destinationUrl,
                     const char* data, 
@@ -104,5 +112,6 @@ private:
     std::mutex mtx_;
     std::condition_variable cv_;
     std::atomic<int> activeTasks_;
-    const int maxConcurrentTasks_ = 4;  // Adjust based on system capabilities
+    const unsigned int processorCount = std::thread::hardware_concurrency(); //returns the number of logical cores, not physical
+    const int maxConcurrentTasks_ = processorCount > 0 ? 2*processorCount : 4;
 };
